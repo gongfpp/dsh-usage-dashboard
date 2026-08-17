@@ -1,11 +1,10 @@
 /**
  * dsh-usage-dashboard browser half: renders the sidebar dashboard card and
- * the Settings page, polling the host `usageDashboard` Remote service.
+ * the Settings page, polling the host /api/usage-dashboard HTTP route.
  * @module dsh-usage-dashboard/src/client
  */
 
 import React from 'react'
-import { REMOTE_DESCRIPTOR } from '../typert.js'
 
 export const inject = ['slots']
 
@@ -45,8 +44,13 @@ function adoptStyles() {
   document.head.appendChild(style)
 }
 
-/** The mounted `usageDashboard` Remote namespace (set once the mount settles). */
-let api = undefined
+const apiFetch = async (action, body) => {
+  const init = body !== undefined
+    ? { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }
+    : undefined
+  const res = await window.fetch('/api/usage-dashboard?action=' + action, init)
+  return await res.json()
+}
 
 const fmtTokens = (n) => {
   const v = Number(n) || 0
@@ -84,18 +88,16 @@ function Dashboard(props) {
     let alive = true
     let timerId = undefined
     const refresh = async () => {
-      if (api === undefined || !alive) return
+      if (!alive) return
       try {
-        const v = await api.snapshot()
+        const v = await apiFetch('snapshot')
         if (alive && v) setSnap(v)
       } catch { /* keep the last snapshot */ }
       timerId = window.setTimeout(refresh, Math.max(1000, intervalMs))
     }
-    if (api !== undefined) {
-      api.configGet()
-        .then((v) => { if (alive && v && v.config && Number(v.config.pollIntervalMs) >= 1000) setIntervalMs(Number(v.config.pollIntervalMs)) })
-        .catch(() => {})
-    }
+    apiFetch('config-get')
+      .then((v) => { if (alive && v && v.config && Number(v.config.pollIntervalMs) >= 1000) setIntervalMs(Number(v.config.pollIntervalMs)) })
+      .catch(() => {})
     void refresh()
     return () => { alive = false; if (timerId !== undefined) window.clearTimeout(timerId) }
   }, [intervalMs])
@@ -125,11 +127,9 @@ function SettingsPage() {
   const [msg, setMsg] = React.useState('')
   React.useEffect(() => {
     let alive = true
-    if (api !== undefined) {
-      api.configGet()
-        .then((v) => { if (alive && v && v.config) setCfg(v.config) })
-        .catch(() => {})
-    }
+    apiFetch('config-get')
+      .then((v) => { if (alive && v && v.config) setCfg(v.config) })
+      .catch(() => {})
     return () => { alive = false }
   }, [])
   const setNum = (key, value) => setCfg((c) => {
@@ -145,15 +145,13 @@ function SettingsPage() {
   })
   const save = () => {
     setMsg('')
-    if (api === undefined) return
-    api.configSet({ config: cfg })
+    apiFetch('config-set', { config: cfg })
       .then((v) => { setMsg(v && v.ok ? '已保存 ✓' : '保存失败') })
       .catch(() => { setMsg('保存失败') })
   }
   const resetToday = () => {
     setMsg('')
-    if (api === undefined) return
-    api.resetToday()
+    apiFetch('reset-today')
       .then((v) => { setMsg(v && v.ok ? '今日统计已重置 ✓' : '重置失败') })
       .catch(() => { setMsg('重置失败') })
   }
@@ -193,13 +191,6 @@ export function apply(ctx) {
   const slots = ctx.get('slots')
   if (slots === undefined) return
   adoptStyles()
-
-  // Mount the Remote namespace; the components read `api` once it is set.
-  ctx.effect(async () => {
-    const dispose = await ctx.remote.$mount(REMOTE_DESCRIPTOR)
-    api = ctx.reflect.get('remote.usageDashboard')
-    return dispose
-  }, 'usage-dashboard: remote mount')
 
   slots.inject('sidebar.footer.dashboard', () => slots.register(
     { name: 'sidebar.footer.dashboard', id: 'usage-dashboard', order: 0 },

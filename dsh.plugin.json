@@ -1,11 +1,11 @@
 {
   "name": "dsh-usage-dashboard",
   "description": "Sidebar dashboard: balance, parallel tasks, daily tokens and estimated cost for the DeepSeek Harness web GUI.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "entry": {
     "name": "dsh-usage-dashboard",
     "inject": [
-      "typert",
+      "webServer",
       "timer"
     ]
   },

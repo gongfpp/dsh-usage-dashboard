@@ -1,6 +1,6 @@
 {
   "name": "dsh-usage-dashboard",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Sidebar dashboard for the DeepSeek Harness web GUI: real-time account balance, parallel task count, per-day token usage and estimated cost.",
   "type": "module",
   "main": "lib/index.js",
@@ -39,17 +39,9 @@
   },
   "license": "MIT",
   "peerDependencies": {
-    "@deepseek-ai/cordis": "*",
-    "@deepseek-ai/dsh-typert-protocol": "*",
     "react": "^18.2.0"
   },
   "peerDependenciesMeta": {
-    "@deepseek-ai/cordis": {
-      "optional": true
-    },
-    "@deepseek-ai/dsh-typert-protocol": {
-      "optional": true
-    },
     "react": {
       "optional": true
     }

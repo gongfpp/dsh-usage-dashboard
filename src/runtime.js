@@ -1,11 +1,9 @@
 /**
  * Usage Dashboard runtime: per-day token/cost state with durable persistence,
- * the DeepSeek balance probe, the parallel-task count, and the Remote RPC
- * surface (`usageDashboard`) consumed by the browser card.
+ * the DeepSeek balance probe, the parallel-task count, and the HTTP API
+ * surface consumed by the browser card.
  * @module dsh-usage-dashboard/src/runtime
  */
-
-import { TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 
 /** Default configuration. Prices are USD per 1M tokens; the cost is an estimate. */
 const DEFAULT_CONFIG = {
@@ -54,14 +52,8 @@ const todayKey = () => {
 
 const emptyDay = () => ({ input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 })
 
-/**
- * The `usageDashboard` Remote service. The constructor registers the service
- * on its context under that key (TypertRemoteService base); the gateway
- * dispatches the Remote invocations to the public methods below.
- */
-export class UsageDashboardRuntime extends TypertRemoteService {
+export class UsageDashboardRuntime {
   constructor(ctx) {
-    super(ctx, 'usageDashboard')
     this.ctx = ctx
     this.state = {
       config: sanitizeConfig(DEFAULT_CONFIG),
@@ -109,7 +101,6 @@ export class UsageDashboardRuntime extends TypertRemoteService {
           this.state.costUsd = Number(parsed.costUsd) || 0
           this.state.history = hist
         } else {
-          // New natural day: archive the previous day, start fresh.
           hist[loadedDay] = { tokens: Object.assign(emptyDay(), parsed.tokens || {}), costUsd: Number(parsed.costUsd) || 0 }
           const keys = Object.keys(hist)
           while (keys.length > 60) delete hist[keys.shift()]
@@ -144,7 +135,6 @@ export class UsageDashboardRuntime extends TypertRemoteService {
     }, 3000)
   }
 
-  /** Flush any pending save (called on plugin teardown). */
   flushSave() {
     if (this.saveHandle !== null) {
       this.saveHandle()
@@ -167,7 +157,6 @@ export class UsageDashboardRuntime extends TypertRemoteService {
     this.#scheduleSave()
   }
 
-  /** Called from the llm/stream listener for every `usage` chunk. */
   addUsage(model, usage) {
     this.#rotateDay()
     const input = Number(usage.inputTokens) || 0
@@ -185,7 +174,6 @@ export class UsageDashboardRuntime extends TypertRemoteService {
     this.#scheduleSave()
   }
 
-  /** Recompute the running-agent set from the live registry. */
   refreshRunning() {
     const agents = this.ctx.get('agents')
     if (agents === undefined) return
@@ -214,8 +202,6 @@ export class UsageDashboardRuntime extends TypertRemoteService {
     }
     if (!key) { this.balanceError = 'DEEPSEEK_API_KEY 未配置'; return }
     const timeout = Math.max(3000, this.state.config.balanceTimeoutMs || 10000)
-    // TLS 1.2 is forced explicitly: the harness shell may run Windows
-    // PowerShell 5.1, which does not negotiate TLS 1.2+ by default.
     const cmd = [
       '[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12',
       '$h = @{ Authorization = "Bearer $env:DASH_KEY" }',
@@ -259,9 +245,7 @@ export class UsageDashboardRuntime extends TypertRemoteService {
     }
   }
 
-  // ---- Remote RPC surface (dispatched by the typert gateway) ----
-
-  async snapshot() {
+  async handleSnapshot() {
     await this.stateReady
     this.#rotateDay()
     this.refreshRunning()
@@ -282,19 +266,19 @@ export class UsageDashboardRuntime extends TypertRemoteService {
     }
   }
 
-  async configGet() {
+  async handleConfigGet() {
     await this.stateReady
     return { ok: true, config: JSON.parse(JSON.stringify(this.state.config)) }
   }
 
-  async configSet(config) {
+  async handleConfigSet(config) {
     await this.stateReady
     this.state.config = sanitizeConfig(config)
     await this.#saveState()
     return { ok: true, config: JSON.parse(JSON.stringify(this.state.config)) }
   }
 
-  async resetToday() {
+  async handleResetToday() {
     await this.stateReady
     this.state.tokens = emptyDay()
     this.state.costUsd = 0
