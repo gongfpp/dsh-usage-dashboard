@@ -1,0 +1,6 @@
+# Mounts the host half into any DSH profile that installs this package.
+# The client half is picked up automatically from the same loader entry
+# through the package's `dsh.client` declaration.
+- insert:
+    - id: dsh-usage-dashboard
+      name: dsh-usage-dashboard
